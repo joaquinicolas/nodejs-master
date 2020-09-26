@@ -3,14 +3,16 @@ var bodyParser = require('body-parser');
 var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
+const mongoose = require('mongoose');
 
 app.use(express.static(__dirname));
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({extended: false}));
 
-var dbUrl =  'mongodb://'
+mongoose.Promise = Promise;
+var dbUrl = 'mongodb://'
 
-var Message = mongoose.model('Message', {
+const Message = mongoose.model('Message', {
     name: String,
     message: String,
 });
@@ -21,16 +23,18 @@ app.get('/messages', (req, res) => {
     });
 });
 
-app.post('/messages', (req, res) => {
+app.post('/messages', async (req, res) => {
     const message = new Message(req.body);
 
-    message.save(err => {
-        if (err) {
-            res.sendStatus(500);
-        }
+    var savedMessage = await message.save()
+    var censored = await Message.findOne({message: 'badword'})
+    if (censored) {
+        console.log('censored words found', censored);
+        await Message.remove({_id: censored.id});
+    } else {
         io.emit('message', req.body);
-        res.sendStatus(200);
-    });
+    }
+    res.sendStatus(200);
 });
 
 io.on('connection', (socket) => {
